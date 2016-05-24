@@ -1424,9 +1424,6 @@ void CATLXMLProcessor::ParsePreloadsData(char const* const szFolderPath, EAudioD
 				{
 					if (_stricmp(pATLConfigRoot->getTag(), SATLXMLTags::szRootNodeTag) == 0)
 					{
-
-						uint versionNumber = 1;
-						pATLConfigRoot->getAttr(SATLXMLTags::szATLVersionAttribute, versionNumber);
 						size_t const numChildren = static_cast<size_t>(pATLConfigRoot->getChildCount());
 
 						for (size_t i = 0; i < numChildren; ++i)
@@ -1444,11 +1441,11 @@ void CATLXMLProcessor::ParsePreloadsData(char const* const szFolderPath, EAudioD
 									if (rootFolderPath.npos != lastSlashIndex)
 									{
 										CryFixedStringT<MAX_AUDIO_FILE_PATH_LENGTH> const folderName(rootFolderPath.substr(lastSlashIndex + 1, rootFolderPath.size()));
-										ParseAudioPreloads(pAudioConfigNode, dataScope, folderName.c_str(), versionNumber);
+										ParseAudioPreloads(pAudioConfigNode, dataScope, folderName.c_str());
 									}
 									else
 									{
-										ParseAudioPreloads(pAudioConfigNode, dataScope, nullptr, versionNumber);
+										ParseAudioPreloads(pAudioConfigNode, dataScope, nullptr);
 									}
 								}
 								else if (_stricmp(szAudioConfigNodeTag, SATLXMLTags::szTriggersNodeTag) == 0 ||
@@ -1594,143 +1591,122 @@ void CATLXMLProcessor::ClearControlsData(EAudioDataScope const dataScope)
 }
 
 //////////////////////////////////////////////////////////////////////////
-void CATLXMLProcessor::ParseAudioPreloads(XmlNodeRef const pPreloadDataRoot, EAudioDataScope const dataScope, char const* const szFolderName, uint const version)
+void CATLXMLProcessor::ParseAudioPreloads(XmlNodeRef const pPreloadDataRoot, EAudioDataScope const dataScope, char const* const szFolderName)
 {
 	LOADING_TIME_PROFILE_SECTION;
 
-	size_t const preloadRequestCount = static_cast<size_t>(pPreloadDataRoot->getChildCount());
+	size_t const nPreloadRequestCount = static_cast<size_t>(pPreloadDataRoot->getChildCount());
 
-	for (size_t i = 0; i < preloadRequestCount; ++i)
+	for (size_t i = 0; i < nPreloadRequestCount; ++i)
 	{
 		XmlNodeRef const pPreloadRequestNode(pPreloadDataRoot->getChild(i));
 
 		if (pPreloadRequestNode && _stricmp(pPreloadRequestNode->getTag(), SATLXMLTags::szATLPreloadRequestTag) == 0)
 		{
-			AudioPreloadRequestId audioPreloadRequestID = SATLInternalControlIDs::globalPreloadRequestId;
-			char const* szAudioPreloadRequestName = "global_atl_preloads";
+			AudioPreloadRequestId nAudioPreloadRequestID = SATLInternalControlIDs::globalPreloadRequestId;
+			char const* sAudioPreloadRequestName = "global_atl_preloads";
 			bool const bAutoLoad = (_stricmp(pPreloadRequestNode->getAttr(SATLXMLTags::szATLTypeAttribute), SATLXMLTags::szATLDataLoadType) == 0);
 
 			if (!bAutoLoad)
 			{
-				szAudioPreloadRequestName = pPreloadRequestNode->getAttr(SATLXMLTags::szATLNameAttribute);
-				audioPreloadRequestID = static_cast<AudioPreloadRequestId>(AudioStringToId(szAudioPreloadRequestName));
+				sAudioPreloadRequestName = pPreloadRequestNode->getAttr(SATLXMLTags::szATLNameAttribute);
+				nAudioPreloadRequestID = static_cast<AudioPreloadRequestId const>(AudioStringToId(sAudioPreloadRequestName));
 			}
 			else if (dataScope == eAudioDataScope_LevelSpecific)
 			{
-				szAudioPreloadRequestName = szFolderName;
-				audioPreloadRequestID = static_cast<AudioPreloadRequestId>(AudioStringToId(szAudioPreloadRequestName));
+				sAudioPreloadRequestName = szFolderName;
+				nAudioPreloadRequestID = static_cast<AudioPreloadRequestId const>(AudioStringToId(sAudioPreloadRequestName));
 			}
 
-			if (audioPreloadRequestID != INVALID_AUDIO_PRELOAD_REQUEST_ID)
+			if (nAudioPreloadRequestID != INVALID_AUDIO_PRELOAD_REQUEST_ID)
 			{
-				XmlNodeRef pFileListParentNode = nullptr;
-				if (version >= 2)
+				size_t const nPreloadRequestChidrenCount = static_cast<size_t>(pPreloadRequestNode->getChildCount());
+
+				if (nPreloadRequestChidrenCount > 1)
 				{
-					size_t const platformCount = pPreloadRequestNode->getChildCount();
+					// We need to have at least two children: ATLPlatforms and at least one ATLConfigGroup
+					XmlNodeRef const pPlatformsNode(pPreloadRequestNode->getChild(0));
+					char const* sATLConfigGroupName = nullptr;
 
-					for (size_t j = 0; j < platformCount; ++j)
+					if (pPlatformsNode && _stricmp(pPlatformsNode->getTag(), SATLXMLTags::szATLPlatformsTag) == 0)
 					{
-						XmlNodeRef const pPlatformNode(pPreloadRequestNode->getChild(j));
+						size_t const nPlatformCount = pPlatformsNode->getChildCount();
 
-						if (pPlatformNode && _stricmp(pPlatformNode->getAttr(SATLXMLTags::szATLNameAttribute), SATLXMLTags::szPlatform) == 0)
+						for (size_t j = 0; j < nPlatformCount; ++j)
 						{
-							pFileListParentNode = pPlatformNode;
-							break;
-						}
-					}
-				}
-				else
-				{
-					size_t const preloadRequestChidrenCount = static_cast<size_t>(pPreloadRequestNode->getChildCount());
+							XmlNodeRef const pPlatformNode(pPlatformsNode->getChild(j));
 
-					if (preloadRequestChidrenCount > 1)
-					{
-						// We need to have at least two children: ATLPlatforms and at least one ATLConfigGroup
-						XmlNodeRef const pPlatformsNode(pPreloadRequestNode->getChild(0));
-						char const* szATLConfigGroupName = nullptr;
-
-						if (pPlatformsNode && _stricmp(pPlatformsNode->getTag(), SATLXMLTags::szATLPlatformsTag) == 0)
-						{
-							size_t const platformCount = pPlatformsNode->getChildCount();
-
-							for (size_t j = 0; j < platformCount; ++j)
+							if (pPlatformNode && _stricmp(pPlatformNode->getAttr(SATLXMLTags::szATLNameAttribute), SATLXMLTags::szPlatform) == 0)
 							{
-								XmlNodeRef const pPlatformNode(pPlatformsNode->getChild(j));
-
-								if (pPlatformNode && _stricmp(pPlatformNode->getAttr(SATLXMLTags::szATLNameAttribute), SATLXMLTags::szPlatform) == 0)
-								{
-									szATLConfigGroupName = pPlatformNode->getAttr(SATLXMLTags::szATLConfigGroupAttribute);
-									break;
-								}
-							}
-						}
-
-						if (szATLConfigGroupName != nullptr)
-						{
-							for (size_t j = 1; j < preloadRequestChidrenCount; ++j)
-							{
-								XmlNodeRef const pConfigGroupNode(pPreloadRequestNode->getChild(j));
-								if (_stricmp(pConfigGroupNode->getAttr(SATLXMLTags::szATLNameAttribute), szATLConfigGroupName) == 0)
-								{
-									pFileListParentNode = pConfigGroupNode;
-									break;
-								}
+								sATLConfigGroupName = pPlatformNode->getAttr(SATLXMLTags::szATLConfigGroupAttribute);
+								break;
 							}
 						}
 					}
-				}
 
-				if (pFileListParentNode)
-				{
-					// Found the config group corresponding to the specified platform.
-					size_t const fileCount = static_cast<size_t>(pFileListParentNode->getChildCount());
-
-					CATLPreloadRequest::FileEntryIds cFileEntryIDs;
-					cFileEntryIDs.reserve(fileCount);
-
-					for (size_t k = 0; k < fileCount; ++k)
+					if (sATLConfigGroupName != nullptr)
 					{
-						AudioFileEntryId const id = m_fileCacheMgr.TryAddFileCacheEntry(pFileListParentNode->getChild(k), dataScope, bAutoLoad);
-
-						if (id != INVALID_AUDIO_FILE_ENTRY_ID)
+						for (size_t j = 1; j < nPreloadRequestChidrenCount; ++j)
 						{
-							cFileEntryIDs.push_back(id);
-						}
-						else
-						{
-							g_audioLogger.Log(eAudioLogType_Warning, "Preload request \"%s\" could not create file entry from tag \"%s\"!", szAudioPreloadRequestName, pFileListParentNode->getChild(k)->getTag());
-						}
-					}
+							XmlNodeRef const pConfigGroupNode(pPreloadRequestNode->getChild(j));
 
-					CATLPreloadRequest* pPreloadRequest = stl::find_in_map(m_preloadRequests, audioPreloadRequestID, nullptr);
+							if (pConfigGroupNode && _stricmp(pConfigGroupNode->getAttr(SATLXMLTags::szATLNameAttribute), sATLConfigGroupName) == 0)
+							{
+								// Found the config group corresponding to the specified platform.
+								size_t const nFileCount = static_cast<size_t>(pConfigGroupNode->getChildCount());
 
-					if (pPreloadRequest == nullptr)
-					{
-						POOL_NEW(CATLPreloadRequest, pPreloadRequest)(audioPreloadRequestID, dataScope, bAutoLoad, cFileEntryIDs);
+								CATLPreloadRequest::FileEntryIds cFileEntryIDs;
+								cFileEntryIDs.reserve(nFileCount);
 
-						if (pPreloadRequest != nullptr)
-						{
-							m_preloadRequests[audioPreloadRequestID] = pPreloadRequest;
+								for (size_t k = 0; k < nFileCount; ++k)
+								{
+									AudioFileEntryId const nID = m_fileCacheMgr.TryAddFileCacheEntry(pConfigGroupNode->getChild(k), dataScope, bAutoLoad);
+
+									if (nID != INVALID_AUDIO_FILE_ENTRY_ID)
+									{
+										cFileEntryIDs.push_back(nID);
+									}
+									else
+									{
+										g_audioLogger.Log(eAudioLogType_Warning, "Preload request \"%s\" could not create file entry from tag \"%s\"!", sAudioPreloadRequestName, pConfigGroupNode->getChild(k)->getTag());
+									}
+								}
+								cFileEntryIDs.shrink_to_fit();
+
+								CATLPreloadRequest* pPreloadRequest = stl::find_in_map(m_preloadRequests, nAudioPreloadRequestID, nullptr);
+
+								if (pPreloadRequest == nullptr)
+								{
+									POOL_NEW(CATLPreloadRequest, pPreloadRequest)(nAudioPreloadRequestID, dataScope, bAutoLoad, cFileEntryIDs);
+
+									if (pPreloadRequest != nullptr)
+									{
+										m_preloadRequests[nAudioPreloadRequestID] = pPreloadRequest;
 
 #if defined(INCLUDE_AUDIO_PRODUCTION_CODE)
-							m_pDebugNameStore->AddAudioPreloadRequest(audioPreloadRequestID, szAudioPreloadRequestName);
-#endif                // INCLUDE_AUDIO_PRODUCTION_CODE
+										m_pDebugNameStore->AddAudioPreloadRequest(nAudioPreloadRequestID, sAudioPreloadRequestName);
+#endif              // INCLUDE_AUDIO_PRODUCTION_CODE
+									}
+									else
+									{
+										CryFatalError("<Audio>: Failed to allocate CATLPreloadRequest");
+									}
+								}
+								else
+								{
+									// Add to existing preload request.
+									pPreloadRequest->m_fileEntryIds.insert(pPreloadRequest->m_fileEntryIds.end(), cFileEntryIDs.begin(), cFileEntryIDs.end());
+								}
+
+								break;// no need to look through the rest of the ConfigGroups
+							}
 						}
-						else
-						{
-							CryFatalError("<Audio>: Failed to allocate CATLPreloadRequest");
-						}
-					}
-					else
-					{
-						// Add to existing preload request.
-						pPreloadRequest->m_fileEntryIds.insert(pPreloadRequest->m_fileEntryIds.end(), cFileEntryIDs.begin(), cFileEntryIDs.end());
 					}
 				}
 			}
 			else
 			{
-				g_audioLogger.Log(eAudioLogType_Error, "Preload request \"%s\" already exists! Skipping this entry!", szAudioPreloadRequestName);
+				g_audioLogger.Log(eAudioLogType_Error, "Preload request \"%s\" already exists! Skipping this entry!", sAudioPreloadRequestName);
 			}
 		}
 	}
