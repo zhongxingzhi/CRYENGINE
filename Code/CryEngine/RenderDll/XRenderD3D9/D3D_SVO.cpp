@@ -1538,7 +1538,7 @@ bool CSvoRenderer::SetShaderParameters(float*& pSrc, uint32 paramType, UFloat4* 
 			}
 
 			sData[0].f[1] = pSR->IsActive() ? fModeFin : -1.f;
-			sData[0].f[2] = pSR->e_svoDVR ? (float)pSR->e_svoDVR : ((pSR->m_texInfo.bSvoReady && pSR->e_svoTI_NumberOfBounces) ? pSR->e_svoTI_SpecularAmplifier : 0);
+			sData[0].f[2] = (float)pSR->e_svoDVR;
 			sData[0].f[3] = pSR->e_svoTI_SkyColorMultiplier;
 			break;
 		}
@@ -1558,6 +1558,15 @@ bool CSvoRenderer::SetShaderParameters(float*& pSrc, uint32 paramType, UFloat4* 
 			sData[0].f[0] = pSR->e_svoTI_PointLightsMultiplier;
 			sData[0].f[1] = gEnv->IsEditing() ? 0 : (pSR->e_svoTI_TemporalFilteringMinDistance / gcpRendD3D->GetRCamera().fFar);
 			sData[0].f[2] = pSR->e_svoTI_MinReflectance;
+			sData[0].f[3] = 0;
+			break;
+		}
+
+	case ECGP_PB_SvoParams7:
+		{
+			sData[0].f[0] = pSR->e_svoTI_AnalyticalOccludersRange;
+			sData[0].f[1] = pSR->e_svoTI_AnalyticalOccludersSoftness;
+			sData[0].f[2] = 0;
 			sData[0].f[3] = 0;
 			break;
 		}
