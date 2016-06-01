@@ -53,6 +53,8 @@
 #include "RopeRenderNode.h"
 #include "RenderMeshMerger.h"
 #include "PhysCallbacks.h"
+#include "LPVRenderNode.h"
+#include "GlobalIllumination.h"
 #include "DeferredCollisionEvent.h"
 #include "MergedMeshRenderNode.h"
 #include "BreakableGlassRenderNode.h"
@@ -240,7 +242,6 @@ C3DEngine::C3DEngine(ISystem* pSystem)
 	m_nOceanRenderFlags = 0;
 
 	m_bSunShadows = m_bShowTerrainSurface = true;
-	m_bSunShadowsFromTerrain = false;
 	m_nSunAdditionalCascades = 0;
 	m_CachedShadowsBounds.Reset();
 	m_nCachedShadowsUpdateStrategy = ShadowMapFrustum::ShadowCacheData::eFullUpdate;
@@ -388,6 +389,8 @@ C3DEngine::C3DEngine(ISystem* pSystem)
 	m_eShadowMode = ESM_NORMAL;
 	m_pSegmentsManager = 0;
 	m_bSegmentOperationInProgress = false;
+
+	m_pGlobalIlluminationManager = NULL;
 
 	ClearDebugFPSInfo();
 
@@ -1245,6 +1248,11 @@ void C3DEngine::UpdateRenderingCamera(const char* szCallerName, const SRendering
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
+	// update all system which depend on the 3dengine camera
+	if (m_pGlobalIlluminationManager)
+		m_pGlobalIlluminationManager->UpdatePosition(passInfo);
+
+	/////////////////////////////////////////////////////////////////////////////
 	// Update Foliage
 	float dt = GetTimer()->GetFrameTime();
 	CStatObjFoliage* pFoliage, * pFoliageNext;
@@ -1705,6 +1713,7 @@ bool C3DEngine::IsTessellationAllowedForShadowMap(const SRenderingPassInfo& pass
 	case SRenderingPassInfo::SHADOW_MAP_LOCAL:
 		return GetCVars()->e_ShadowsTessellateDLights != 0;
 	case SRenderingPassInfo::SHADOW_MAP_NONE:
+	case SRenderingPassInfo::SHADOW_MAP_REFLECTIVE:
 	default:
 		return false;
 	}
@@ -2905,6 +2914,11 @@ IRenderNode* C3DEngine::CreateRenderNode(EERType type)
 	case eERType_VolumeObject:
 		{
 			IVolumeObjectRenderNode* pRenderNode = new CVolumeObjectRenderNode();
+			return pRenderNode;
+		}
+	case eERType_LightPropagationVolume:
+		{
+			ILPVRenderNode* pRenderNode = new CLPVRenderNode();
 			return pRenderNode;
 		}
 #if !defined(EXCLUDE_DOCUMENTATION_PURPOSE)
@@ -4660,8 +4674,7 @@ void C3DEngine::ObjectsTreeMarkAsUncompiled(const IRenderNode* pRenderNode)
 			curNode->MarkAsUncompiled(pRenderNode);
 	}
 
-	if(GetVisAreaManager())
-		GetVisAreaManager()->MarkAllSectorsAsUncompiled(pRenderNode);
+	GetVisAreaManager()->MarkAllSectorsAsUncompiled(pRenderNode);
 }
 
 void C3DEngine::OnObjectModified(IRenderNode* pRenderNode, uint dwFlags)

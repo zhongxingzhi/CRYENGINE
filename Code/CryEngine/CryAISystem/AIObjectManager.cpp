@@ -13,6 +13,8 @@
 #include "ObjectContainer.h"
 #include "./TargetSelection/TargetTrackManager.h"
 
+#include "IActorSystem.h"
+
 //////////////////////////////////////////////////////////////////////////
 //	SAIObjectCreationHelper - helper for serializing AI objects
 //	(used for both normal and bookmark serialization)
@@ -65,6 +67,7 @@ CAIObject* SAIObjectCreationHelper::RecreateObject(void* pAlloc /*=NULL*/)
 		return NULL;
 
 	// first verify it doesn't already exist
+	// cppcheck-suppress assertWithSideEffect
 	assert(gAIEnv.pAIObjectManager->GetAIObject(objectId) == NULL);
 
 	CAIObject* pObject = NULL;
@@ -680,6 +683,8 @@ void CAIObjectManager::OnPoolDefinitionsLoaded(size_t num)
 	STATIC_CHECK(sizeof(TPooledAIObject) >= sizeof(CAIPlayer), Change_TPooledAIObject_To_CAIPlayer);
 	STATIC_CHECK(sizeof(TPooledAIObject) >= sizeof(CAIFlyingVehicle), Change_TPooledAIObject_To_CAIFlyingVehicle);
 
+	ScopedSwitchToGlobalHeap useGlobalHeap;
+
 	m_pPoolAllocator = new stl::TPoolAllocator<TPooledAIObject>(stl::FHeap().PageSize(num));
 	m_PoolBucketSize = num;
 }
@@ -791,6 +796,7 @@ void CAIObjectManager::OnBookmarkEntitySerialize(TSerialize serialize, void* pVE
 				gAIEnv.pObjectContainer->ReleaseDeregisteredObjects(true);
 
 				// verify that it's been removed
+				// cppcheck-suppress assertWithSideEffect
 				assert(GetAIObject(objHeader.objectId) == NULL);
 			}
 
