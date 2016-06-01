@@ -29,6 +29,7 @@
 #include "LightEntity.h"
 #include "WaterWaveRenderNode.h"
 #include "RoadRenderNode.h"
+#include "GlobalIllumination.h"
 #include "PhysCallbacks.h"
 #include "TimeOfDay.h"
 #include "LightEntity.h"
@@ -102,6 +103,7 @@ void C3DEngine::LoadDefaultAssets()
 
 	m_pMatFogVolEllipsoid = GetMatMan()->LoadMaterial("EngineAssets/Materials/Fog/FogVolumeEllipsoid", false);
 	m_pMatFogVolBox = GetMatMan()->LoadMaterial("EngineAssets/Materials/Fog/FogVolumeBox", false);
+	m_pMatLPV = GetMatMan()->LoadMaterial("EngineAssets/Materials/LightPropagationVolumes/Default", false);
 
 	if (GetRenderer())
 	{
@@ -214,6 +216,10 @@ bool C3DEngine::InitLevelForEditor(const char* szFolderName, const char* szMissi
 	{
 		m_pWaterWaveManager = new CWaterWaveManager();
 	}
+
+	// Re-create Global Illumination Manager
+	if (!m_pGlobalIlluminationManager)
+		m_pGlobalIlluminationManager = new CGlobalIlluminationManager();
 
 	{
 		string SettingsFileName = GetLevelFilePath("ScreenshotMap.Settings");
@@ -384,6 +390,13 @@ void C3DEngine::UnloadLevel()
 	{
 		CryComment("Deleting Characters");
 		gEnv->pCharacterManager->ClearResources(false);
+		CryComment("done");
+	}
+
+	{
+		// Delete GI data
+		CryComment("Deleting  Global Illumination Manager");
+		SAFE_DELETE(m_pGlobalIlluminationManager);
 		CryComment("done");
 	}
 
@@ -798,6 +811,10 @@ bool C3DEngine::LoadLevel(const char* szFolderName, const char* szMissionName)
 
 	SAFE_DELETE(m_pWaterWaveManager);
 	m_pWaterWaveManager = new CWaterWaveManager();
+
+	// Re-create Global Illumination Manager
+	SAFE_DELETE(m_pGlobalIlluminationManager);
+	m_pGlobalIlluminationManager = new CGlobalIlluminationManager();
 
 	gEnv->pSystem->SetSystemGlobalState(ESYSTEM_GLOBAL_STATE_LEVEL_LOAD_START_MATERIALS);
 	if (GetCVars()->e_PreloadMaterials)

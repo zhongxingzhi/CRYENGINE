@@ -2581,7 +2581,6 @@ struct IRenderer//: public IRendererCallbackServer
 	// Summary:
 	virtual SSkinningData* EF_CreateSkinningData(uint32 nNumBones, bool bNeedJobSyncVar) = 0;
 	virtual SSkinningData* EF_CreateRemappedSkinningData(uint32 nNumBones, SSkinningData* pSourceSkinningData, uint32 nCustomDataSize, uint32 pairGuid) = 0;
-	virtual void           EF_EnqueueComputeSkinningData(SSkinningData* pData) = 0;
 	virtual int            EF_GetSkinningPoolID() = 0;
 
 	virtual void           UpdateShaderItem(SShaderItem* pShaderItem, IMaterial* pMaterial) = 0;
@@ -2821,6 +2820,8 @@ struct SRendParams
 	float                     fDistance; //!< Distance from camera.
 
 	float                     fRenderQuality; //!< Quality of shaders rendering.
+
+	uint32                    nDLightMask; //!< Light mask to specify which light to use on the object.
 
 	int32                     dwFObjFlags; //!< Approximate information about the lights not included into nDLightMask.
 

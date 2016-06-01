@@ -343,6 +343,8 @@ void CTerrainNode::Init(int x1, int y1, int nNodeSize, CTerrainNode* pParent, bo
 
 	uint8 m_cNewGeomMML = m_cCurrGeomMML = m_cNewGeomMML_Min = m_cNewGeomMML_Max = m_cNodeNewTexMML = m_cNodeNewTexMML_Min = 0;
 
+	m_nLightMaskFrameId = 0;
+
 	m_pLeafData = 0;
 
 	m_nTreeLevel = 0;
@@ -1175,7 +1177,7 @@ void CTerrainNode::IntersectWithShadowFrustum(bool bAllIn, PodArray<IShadowCaste
 	if (bAllIn || (pFrustum && pFrustum->IntersectAABB(GetBBox(), &bAllIn)))
 	{
 		float fSectorSize = GetBBox().max.x - GetBBox().min.x;
-		if (m_pChilds && (fSectorSize > fHalfGSMBoxSize))
+		if (m_pChilds && (fSectorSize*GetCVars()->e_TerrainMeshInstancingShadowLodRatio > fHalfGSMBoxSize || (m_nTreeLevel > GetCVars()->e_TerrainMeshInstancingMinLod && pFrustum->IsCached())))
 		{
 			for (int i = 0; i < 4; i++)
 				m_pChilds[i].IntersectWithShadowFrustum(bAllIn, plstResult, pFrustum, fHalfGSMBoxSize, passInfo);
