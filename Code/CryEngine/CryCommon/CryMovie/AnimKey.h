@@ -6,12 +6,17 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef __animkey_h__
+#define __animkey_h__
+
+#if _MSC_VER > 1000
+	#pragma once
+#endif
 
 #include <CrySystem/IConsole.h>     // <> required for Interfuscator
 #include <CrySystem/File/ICryPak.h> // <> required for Interfuscator
-#include <CrySystem/ILocalizationManager.h>
 #include <CryMath/Bezier.h>
+#include <CryAudio/IAudioInterfacesCommonData.h>
 #include <CryAudio/IAudioSystem.h>
 #include <CryMovie/AnimTime.h>
 
@@ -256,52 +261,54 @@ struct SSequenceKey : public STrackKey
  */
 struct SAudioTriggerKey : public STrackDurationKey
 {
-	SAudioTriggerKey()
-	: STrackDurationKey()
-	{}
+	SAudioTriggerKey() : STrackDurationKey()
+	{
+		m_startTrigger[0] = 0;
+		m_stopTrigger[0] = 0;
+	}
 
 	static const char* GetType()              { return "AudioTrigger"; }
-	const char*        GetDescription() const { return m_keyDescription.c_str(); }
+	const char*        GetDescription() const { return m_startTrigger; }
 
 	void               Serialize(Serialization::IArchive& ar)
 	{
 		STrackDurationKey::Serialize(ar);
 
-		ar(Serialization::AudioTrigger(m_startTriggerName), "startTrigger", "Start Trigger");
-
-		if (m_duration > SAnimTime(0))
+		if (ar.isInput())
 		{
-			ar(Serialization::AudioTrigger(m_stopTriggerName), "stopTrigger", "Stop Trigger");
-			m_keyDescription.Format("%s : %s", m_startTriggerName.c_str(), m_stopTriggerName.c_str());
+			string startTrigger;
+			ar(Serialization::AudioTrigger(startTrigger), "startTrigger", "Start Trigger");
+			cry_strcpy(m_startTrigger, startTrigger.c_str());
+
+			string stopTrigger;
+			ar(Serialization::AudioTrigger(stopTrigger), "stopTrigger", "Stop Trigger");
+			cry_strcpy(m_stopTrigger, stopTrigger.c_str());
+
 		}
 		else
 		{
-			m_keyDescription = m_startTriggerName;
-		}
+			string startTrigger = m_startTrigger;
+			ar(Serialization::AudioTrigger(startTrigger), "startTrigger", "Start Trigger");
 
-		if (ar.isInput())
-		{
-			gEnv->pAudioSystem->GetAudioTriggerId(m_startTriggerName.c_str(), m_startTriggerId);
-			gEnv->pAudioSystem->GetAudioTriggerId(m_stopTriggerName.c_str(), m_stopTriggerId);
+			string stopTrigger = m_stopTrigger;
+			ar(Serialization::AudioTrigger(stopTrigger), "stopTrigger", "Stop Trigger");
 		}
 	}
 
-	string m_startTriggerName;
-	string m_stopTriggerName;
-	string m_keyDescription;
-	AudioControlId m_startTriggerId;
-	AudioControlId m_stopTriggerId;
+	char m_startTrigger[128];
+	char m_stopTrigger[128];
 };
 
 /** SAudioFileKey used in audio file track.
  */
 struct SAudioFileKey : public STrackDurationKey
 {
-	SAudioFileKey()
-	: STrackDurationKey()
-	, m_bIsLocalized(false)
-	, m_bNoTriggerInScrubbing(false)
-	{}
+	SAudioFileKey() : STrackDurationKey()
+	{
+		m_audioFile[0] = 0;
+		m_duration = SAnimTime(0);
+		m_bNoTriggerInScrubbing = false;
+	}
 
 	static const char* GetType()              { return "AudioFile"; }
 	const char*        GetDescription() const { return m_audioFile; }
@@ -310,81 +317,45 @@ struct SAudioFileKey : public STrackDurationKey
 	{
 		STrackKey::Serialize(ar);
 
-		ar(Serialization::SoundFilename(m_audioFile), "file", "Audio File");
-		ar(m_bIsLocalized, "isLocalized", "Localized");
-		ar(m_bNoTriggerInScrubbing, "noTriggerInScrubbing", "No Trigger in Scrubbing");
-
-		if (!PathUtil::GetFileName(m_audioFile).empty())
+		if (ar.isInput())
 		{
-			int pathLength = m_audioFile.find(PathUtil::GetGameFolder());
-			const string tempFilePath = (pathLength == -1) ? PathUtil::GetGameFolder() + CRY_NATIVE_PATH_SEPSTR + m_audioFile : m_audioFile;
-
-			SAudioFileData audioData;
-			gEnv->pAudioSystem->GetAudioFileData(tempFilePath.c_str(), audioData);
-			m_duration = audioData.duration;
+			string audioFile;
+			ar(Serialization::GeneralFilename(audioFile), "file", "Audio File");
+			cry_strcpy(m_audioFile, audioFile.c_str());
 		}
 		else
 		{
-			if (m_bIsLocalized)
-			{
-				const char* szLanguage = gEnv->pSystem->GetLocalizationManager()->GetLanguage();
-				m_audioFile = PathUtil::GetGameFolder() + CRY_NATIVE_PATH_SEPSTR + PathUtil::GetLocalizationFolder() + CRY_NATIVE_PATH_SEPSTR + szLanguage + CRY_NATIVE_PATH_SEPSTR;
-			}
-			else
-			{
-				m_audioFile = PathUtil::GetGameFolder() + CRY_NATIVE_PATH_SEPSTR;
-			}
+			string audioFile = m_audioFile;
+			ar(Serialization::GeneralFilename(audioFile), "file", "Audio File");
 		}
-	}
 
-	string m_audioFile;
-	bool m_bIsLocalized;
-	bool m_bNoTriggerInScrubbing;
-};
-
-/** SAudioSwitchKey used in CAudioSwitchTrack
- */
-struct SAudioSwitchKey : public STrackKey
-{
-	SAudioSwitchKey()
-	: STrackKey()
-	, m_audioSwitchId(INVALID_AUDIO_CONTROL_ID)
-	, m_audioSwitchStateId(INVALID_AUDIO_SWITCH_STATE_ID)
-	{}
-
-	static const char* GetType()              { return "AudioSwitch"; }
-	const char*        GetDescription() const { return m_keyDescription.c_str(); }
-
-	void               Serialize(Serialization::IArchive& ar)
-	{
-		STrackKey::Serialize(ar);
-
-		ar(Serialization::AudioSwitch(m_audioSwitchName), "switchName", "Switch Name");
-		ar(Serialization::AudioSwitchState(m_audioSwitchStateName), "switchState", "Switch State");
-
-		if (ar.isInput())
+		if (gEnv && gEnv->pConsole)
 		{
-			gEnv->pAudioSystem->GetAudioSwitchId(m_audioSwitchName.c_str(), m_audioSwitchId);
-			gEnv->pAudioSystem->GetAudioSwitchStateId(m_audioSwitchId, m_audioSwitchStateName.c_str(), m_audioSwitchStateId);
+			char filePathBuffer[1024];
+			const char* szGameFolder = gEnv->pConsole->GetCVar("sys_game_folder")->GetString();
+			cry_strcpy(filePathBuffer, szGameFolder);
+			cry_strcat(filePathBuffer, "/");
+			cry_strcat(filePathBuffer, m_audioFile);
+
+			SAudioFileData audioData;
+			gEnv->pAudioSystem->GetAudioFileData(filePathBuffer, audioData);
+			m_duration = audioData.duration;
 		}
 
-		m_keyDescription.Format("%s : %s", m_audioSwitchName.c_str(), m_audioSwitchStateName.c_str());
+		ar(m_bNoTriggerInScrubbing, "noTriggerInScrubbing", "No Trigger in Scrubbing");
 	}
 
-	string m_audioSwitchName;
-	string m_audioSwitchStateName;
-	string m_keyDescription;
-
-	AudioControlId m_audioSwitchId;
-	AudioSwitchStateId m_audioSwitchStateId;
+	char m_audioFile[512];
+	bool m_bNoTriggerInScrubbing;
 };
 
 struct SDynamicResponseSignalKey : public STrackKey
 {
-	SDynamicResponseSignalKey()
-	: STrackKey()
-	, m_bNoTriggerInScrubbing(false)
-	{}
+	SDynamicResponseSignalKey() : STrackKey()
+	{
+		m_signalName[0] = 0;
+		m_bNoTriggerInScrubbing = false;
+	}
 
 	static const char* GetType()              { return "DynamicResponseSignal"; }
 	const char*        GetDescription() const { return m_signalName; }
@@ -393,15 +364,38 @@ struct SDynamicResponseSignalKey : public STrackKey
 	{
 		STrackKey::Serialize(ar);
 
-		ar(m_signalName, "signalName", "Signal Name");
-		ar(m_contextVariableName, "contextVariableName", "Context Variable Name");
-		ar(m_contextVariableValue, "contextVariableValue", "Context Variable Value");
+		if (ar.isInput())
+		{
+			string signalName;
+			ar(signalName, "signalName", "Signal Name");
+			cry_strcpy(m_signalName, signalName.c_str());
+
+			string contextVariableName;
+			ar(contextVariableName, "contextVariableName", "Context Variable Name");
+			cry_strcpy(m_contextVariableName, contextVariableName.c_str());
+
+			string contextVariableValue;
+			ar(contextVariableValue, "contextVariableValue", "Context Variable Value");
+			cry_strcpy(m_contextVariableValue, contextVariableValue.c_str());
+		}
+		else
+		{
+			string signalName = m_signalName;
+			ar(signalName, "signalName", "Signal Name");
+
+			string contextVariableName = m_contextVariableName;
+			ar(contextVariableName, "contextVariableName", "Context Variable Name");
+
+			string contextVariableValue = m_contextVariableValue;
+			ar(contextVariableValue, "contextVariableValue", "Context Variable Value");
+		}
+
 		ar(m_bNoTriggerInScrubbing, "noTriggerInScrubbing", "No Trigger in Scrubbing");
 	}
 
-	string m_signalName;
-	string m_contextVariableName;
-	string m_contextVariableValue;
+	char m_signalName[128];
+	char m_contextVariableName[128];
+	char m_contextVariableValue[64];
 	bool m_bNoTriggerInScrubbing;
 };
 
@@ -803,9 +797,12 @@ struct SCaptureKey : public STrackDurationKey
 			m_timeStep = (1.0f / m_frameRate);
 		}
 
-		string folder = m_folder;
-		ar(Serialization::ResourceFolderPath(folder, m_folder), "folder", "Folder");
-		cry_strcpy(m_folder, folder.c_str(), folder.length());
+		string tempFolder = m_folder;
+		size_t pathLength = tempFolder.find(PathUtil::GetGameFolder());
+		string captureFolder = (pathLength == string::npos) ? PathUtil::GetGameFolder() + CRY_NATIVE_PATH_SEPSTR + m_folder : m_folder;
+
+		ar(Serialization::ResourceFolderPath(captureFolder, ""), "folder", "Folder");
+		cry_strcpy(m_folder, captureFolder.c_str(), captureFolder.length());
 
 		ar(m_captureFormat, "format", "Format");
 		ar(m_bOnce, "once", "Once");
@@ -1004,3 +1001,5 @@ inline bool Serialize(Serialization::IArchive& ar, _smart_ptr<IAnimKeyWrapper>& 
 #define SERIALIZATION_ANIM_KEY(type)                     \
   typedef SAnimKeyWrapper<type> SAnimKeyWrapper ## type; \
   REGISTER_IN_INTRUSIVE_FACTORY(IAnimKeyWrapper, SAnimKeyWrapper ## type);
+
+#endif // __animkey_h__
