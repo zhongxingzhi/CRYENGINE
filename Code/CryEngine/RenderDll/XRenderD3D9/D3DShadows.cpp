@@ -14,6 +14,7 @@
 #include "../Common/Shadow_Renderer.h"
 #include "../Common/ReverseDepth.h"
 #include "D3DPostProcess.h"
+#include "D3DLightPropagationVolume.h"
 
 #include <Cry3DEngine/I3DEngine.h>
 
@@ -883,6 +884,12 @@ bool CD3D9Renderer::PrepareDepthMap(CRenderView* pRenderView, ShadowMapFrustum* 
 			m_RP.m_PersFlags2 |= RBPF2_NOALPHABLEND;
 			m_RP.m_StateAnd &= ~GS_BLEND_MASK;
 		}
+		// enable alpha blending for RSMs
+		if (pShadowFrustum->bReflectiveShadowMap)
+		{
+			m_RP.m_PersFlags2 &= ~RBPF2_NOALPHABLEND;
+			m_RP.m_StateAnd |= GS_BLEND_MASK;
+		}
 
 		if (pShadowFrustum->m_eReqTF == eTF_R32F || pShadowFrustum->m_eReqTF == eTF_R16G16F || pShadowFrustum->m_eReqTF == eTF_R16F || pShadowFrustum->m_eReqTF == eTF_R16G16B16A16F)
 		{
@@ -989,19 +996,32 @@ bool CD3D9Renderer::PrepareDepthMap(CRenderView* pRenderView, ShadowMapFrustum* 
 			int arrViewport[4];
 
 			CTexture* pColorTarget = pShadowFrustum->bUseHWShadowMap ? NULL : pShadowFrustum->pDepthTex;
-			SDepthTexture* pDepthTarget = pShadowFrustum->bUseHWShadowMap? &D3dSurface : FX_GetDepthSurface(pShadowFrustum->nTextureWidth, pShadowFrustum->nTextureHeight, false);
-			//SDepthTexture* pDepthTarget = FX_GetDepthSurface(pShadowFrustum->nTextureWidth, pShadowFrustum->nTextureHeight, false);
+			SDepthTexture* pDepthTarget = pShadowFrustum->bUseHWShadowMap || pShadowFrustum->bReflectiveShadowMap ? &D3dSurface : FX_GetDepthSurface(pShadowFrustum->nTextureWidth, pShadowFrustum->nTextureHeight, false);
 
-#if defined(FEATURE_SVO_GI)
-			if (CSvoRenderer::GetRsmColorMap(*pShadowFrustum, true) && CSvoRenderer::GetRsmNormlMap(*pShadowFrustum, true))
+			if (!pShadowFrustum->bReflectiveShadowMap)
 			{
-				FX_PushRenderTarget(0, CSvoRenderer::GetInstance()->GetRsmColorMap(*pShadowFrustum), pDepthTarget, pShadowFrustum->m_eReqTT == eTT_Cube ? nS : -1);
-				FX_PushRenderTarget(1, CSvoRenderer::GetInstance()->GetRsmNormlMap(*pShadowFrustum), NULL, pShadowFrustum->m_eReqTT == eTT_Cube ? nS : -1);
+#if defined(FEATURE_SVO_GI)
+				if (CSvoRenderer::GetRsmColorMap(*pShadowFrustum, true) && CSvoRenderer::GetRsmNormlMap(*pShadowFrustum, true))
+				{
+					FX_PushRenderTarget(0, CSvoRenderer::GetInstance()->GetRsmColorMap(*pShadowFrustum), pDepthTarget, pShadowFrustum->m_eReqTT == eTT_Cube ? nS : -1);
+					FX_PushRenderTarget(1, CSvoRenderer::GetInstance()->GetRsmNormlMap(*pShadowFrustum), NULL, pShadowFrustum->m_eReqTT == eTT_Cube ? nS : -1);
+				}
+				else
+#endif
+				{
+					FX_PushRenderTarget(0, pColorTarget, pDepthTarget, pShadowFrustum->m_eReqTT == eTT_Cube ? nS : -1);   // calls RT_SetViewport() implicitly
+				}
 			}
 			else
-#endif
 			{
-				FX_PushRenderTarget(0, pColorTarget, pDepthTarget, pShadowFrustum->m_eReqTT == eTT_Cube ? nS : -1);   // calls RT_SetViewport() implicitly
+				if (!LPVManager.IsEnabled())
+					continue;
+				PROFILE_LABEL_PUSH("REFLECTIVE_SHADOWMAP");
+				LPVManager.UpdateReflectiveShadowmapSize(LPVManager.m_RSM, pShadowFrustum->nTextureWidth, pShadowFrustum->nTextureHeight);
+
+				FX_PushRenderTarget(0, (CTexture*)LPVManager.m_RSM.pFluxRT, pDepthTarget, -1);
+				FX_PushRenderTarget(1, (CTexture*)LPVManager.m_RSM.pNormalsRT, NULL);
+				FX_PushRenderTarget(2, (CTexture*)LPVManager.m_RSM.pDepthRT, NULL);
 			}
 
 			//SDW-GEN_REND_PATH
@@ -1023,17 +1043,26 @@ bool CD3D9Renderer::PrepareDepthMap(CRenderView* pRenderView, ShadowMapFrustum* 
 				}
 				else
 				{
-#if defined(FEATURE_SVO_GI)
-					if (CSvoRenderer::GetRsmColorMap(*pShadowFrustum, true) && CSvoRenderer::GetRsmNormlMap(*pShadowFrustum, true))
+					if (!pShadowFrustum->bReflectiveShadowMap)
 					{
-						FX_ClearTarget(CSvoRenderer::GetInstance()->GetRsmColorMap(*pShadowFrustum), Clr_Transparent);
-						FX_ClearTarget(CSvoRenderer::GetInstance()->GetRsmNormlMap(*pShadowFrustum), Clr_Transparent);
+#if defined(FEATURE_SVO_GI)
+						if (CSvoRenderer::GetRsmColorMap(*pShadowFrustum, true) && CSvoRenderer::GetRsmNormlMap(*pShadowFrustum, true))
+						{
+							FX_ClearTarget(CSvoRenderer::GetInstance()->GetRsmColorMap(*pShadowFrustum), Clr_Transparent);
+							FX_ClearTarget(CSvoRenderer::GetInstance()->GetRsmNormlMap(*pShadowFrustum), Clr_Transparent);
+						}
+						else
+#endif
+						if (pColorTarget)
+						{
+							FX_ClearTarget(pColorTarget, pShadowFrustum->pDepthTex->GetDstFormat() == eTF_R8G8B8A8 ? ColorF(1, 1, 1, 0) : ColorF(1, 0, 0, 0));
+						}
 					}
 					else
-#endif
-					if (pColorTarget)
 					{
-						FX_ClearTarget(pColorTarget, pShadowFrustum->pDepthTex->GetDstFormat() == eTF_R8G8B8A8 ? ColorF(1, 1, 1, 0) : ColorF(1, 0, 0, 0));
+						FX_ClearTarget((CTexture*)LPVManager.m_RSM.pFluxRT, Clr_Transparent);
+						FX_ClearTarget((CTexture*)LPVManager.m_RSM.pDepthRT, Clr_Transparent);
+						FX_ClearTarget((CTexture*)LPVManager.m_RSM.pNormalsRT, Clr_Transparent);
 					}
 
 					FX_ClearTarget(pDepthTarget, CLEAR_ZBUFFER | CLEAR_STENCIL, Clr_FarPlane_R.r, 0);
@@ -1057,9 +1086,9 @@ bool CD3D9Renderer::PrepareDepthMap(CRenderView* pRenderView, ShadowMapFrustum* 
 			if (pShadowFrustum->bUseHWShadowMap)
 			{
 #if defined(FEATURE_SVO_GI)
-				if (!CSvoRenderer::GetRsmColorMap(*pShadowFrustum))
+				if (!pShadowFrustum->bReflectiveShadowMap && !CSvoRenderer::GetRsmColorMap(*pShadowFrustum))
 #else
-				if (true)
+				if (!pShadowFrustum->bReflectiveShadowMap)
 #endif
 				{
 					FX_SetState(GS_COLMASK_NONE, -1);
@@ -1109,10 +1138,17 @@ bool CD3D9Renderer::PrepareDepthMap(CRenderView* pRenderView, ShadowMapFrustum* 
 				OldPipeline_ProcessRenderList(rendItems, -1, -1, EFSLIST_SHADOW_GEN, FX_FlushShader_ShadowGen, false);
 			}
 
+			if (pShadowFrustum->bReflectiveShadowMap)
+			{
+				PROFILE_LABEL_POP("REFLECTIVE_SHADOWMAP");
+				FX_PopRenderTarget(2);
+				FX_PopRenderTarget(1);
+			}
+
 			FX_PopRenderTarget(0);
 
 #if defined(FEATURE_SVO_GI)
-			if (CSvoRenderer::GetRsmColorMap(*pShadowFrustum) && CSvoRenderer::GetRsmNormlMap(*pShadowFrustum))
+			if (!pShadowFrustum->bReflectiveShadowMap && CSvoRenderer::GetRsmColorMap(*pShadowFrustum) && CSvoRenderer::GetRsmNormlMap(*pShadowFrustum))
 				FX_PopRenderTarget(1);
 #endif
 
@@ -1683,6 +1719,22 @@ void CD3D9Renderer::EF_PrepareAllDepthMaps(CRenderView* pRenderView)
 			continue;
 
 		FX_PrepareDepthMapsForLight(pRenderView, *pLight, nLightID);
+
+		// Injection of reflective shadow map into LPV
+		if (pLight->m_Flags & DLF_REFLECTIVE_SHADOWMAP)
+		{
+			auto& SMFrustums = pRenderView->GetShadowFrustumsForLight(nLightID);
+			if (!SMFrustums.empty())
+			{
+				ShadowMapFrustum* pCurFrustum = SMFrustums.front()->pFrustum;
+				CRELightPropagationVolume* pVol = LPVManager.GetGIVolumeByLight(pLight->m_pOwner);
+				if (pCurFrustum && pVol)
+				{
+					LPVManager.m_RSM.mxLightViewProj = pCurFrustum->mLightViewMatrix;
+					pVol->InjectReflectiveShadowMap(LPVManager.m_RSM);
+				}
+			}
+		}
 	}
 
 	//////////////////////////////////////////////////////////////////////////
@@ -1757,7 +1809,11 @@ void CD3D9Renderer::FX_MergeShadowMaps(CRenderView* pRenderView, ShadowMapFrustu
 
 	const bool bOutsideFrustum = abs(crop.x) > 1.0f || abs(crop.x + crop.z) > 1.0f || abs(crop.y) > 1.0f || abs(crop.y + crop.w) > 1.0f;
 	const bool bEmptyCachedFrustum = pSrc->nShadowGenMask == 0;
-	const bool bRequireCopy = bOutsideFrustum || bEmptyCachedFrustum || nRendItemCount > 0;
+	bool bRequireCopy = bOutsideFrustum || bEmptyCachedFrustum || nRendItemCount > 0;
+
+#if defined(CRY_PLATFORM_ANDROID)
+	bRequireCopy = bEmptyCachedFrustum; // workaround for shader compiler issues in ReprojectShadowMap on android
+#endif
 
 	pDst->bIncrementalUpdate = true;
 	pDst->mLightViewMatrix = pSrc->mLightViewMatrix * cropMatrix;
@@ -1804,7 +1860,7 @@ void CD3D9Renderer::FX_MergeShadowMaps(CRenderView* pRenderView, ShadowMapFrustu
 			gRenDev->FX_SetState(GS_DEPTHWRITE | GS_DEPTHFUNC_NOTEQUAL);
 
 			Matrix44 mReprojDstToSrc = pDst->mLightViewMatrix.GetInverted() * pSrc->mLightViewMatrix;
-			;
+
 			static CCryNameR paramReprojMatDstToSrc("g_mReprojDstToSrc");
 			CShaderMan::s_ShaderShadowMaskGen->FXSetPSFloat(paramReprojMatDstToSrc, (Vec4*) mReprojDstToSrc.GetData(), 4);
 
