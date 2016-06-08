@@ -780,8 +780,14 @@ void CShadowMapStage::CopyShadowMap(const CShadowMapPass& sourcePass, CShadowMap
 	const bool bEmptySrcFrustum = pSrc->nShadowGenMask == 0;
 	const auto& renderItems = reinterpret_cast<CRenderView*>(targetPass.m_pFrustumToRender->pShadowsView.get())->GetRenderItems(0);
 
+	bool bAllowMerging = true;
+
+#if defined(CRY_PLATFORM_ANDROID)
+	bAllowMerging = false; // workaround for shader compiler issues in ReprojectShadowMap on android
+#endif
+
 	// do we need to merge static shadows into the dynamic shadow map?
-	if (bEmptySrcFrustum || !renderItems.empty())
+	if (bEmptySrcFrustum || (!renderItems.empty() && bAllowMerging))
 	{
 		if (bEmptySrcFrustum)
 		{
