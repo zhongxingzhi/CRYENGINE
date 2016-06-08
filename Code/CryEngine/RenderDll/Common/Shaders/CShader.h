@@ -324,6 +324,7 @@ public:
 	static CShader*              s_ShaderTreeSprites;
 	static CShader*              s_ShaderScaleForm;
 	static CShader*              s_ShaderStars;
+	static CShader*              s_ShaderLPV;
 	static CShader*              s_ShaderShadowBlur;
 	static CShader*              s_ShaderShadowMaskGen;
 #if defined(FEATURE_SVO_GI)
@@ -342,7 +343,6 @@ public:
 	static CShader*              s_ShaderDXTCompress;
 	static CShader*              s_ShaderStereo;
 	static CShader*              s_ShaderClouds;
-	static CShader*              s_shaderComputeSkinning;
 
 	const SInputShaderResources* m_pCurInputResources;
 	SShaderGen*                  m_pGlobalExt;
@@ -359,7 +359,6 @@ public:
 
 	EShaderCacheMode             m_eCacheMode;
 
-	bool                         m_bActivatePhase;
 	char*                        m_szShaderPrecache;
 
 	FXShaderCacheCombinations    m_ShaderCacheCombinations[2];
@@ -543,10 +542,6 @@ public:
 	const char*       mfGetLevelListName() const;
 	void              mfExportShaders();
 
-	bool              mfReleasePreactivatedShaderData();
-	bool              mfPreactivateShaders2(const char* szPak, const char* szPath, bool bPersistent, const char* szBindRoot);
-	bool              mfPreactivate2(CResFileLookupDataMan& LevelLookup, string szPathPerLevel, string szPathGlobal, bool bVS, bool bPersistent);
-
 	bool              mfPreloadBinaryShaders();
 
 	bool              LoadShaderStartupCache();
@@ -572,7 +567,7 @@ public:
 
 #if CRY_PLATFORM_WINDOWS && CRY_PLATFORM_64BIT
 	#pragma warning( push )           //AMD Port
-	#pragma warning( disable : 4267 ) // conversion from 'size_t' to 'XXX', possible loss of data
+	#pragma warning( disable : 4267 )     // conversion from 'size_t' to 'XXX', possible loss of data
 #endif
 
 	int Size()
@@ -600,9 +595,9 @@ public:
 };
 
 #if CRY_PLATFORM_WINDOWS && CRY_PLATFORM_64BIT
-	#pragma warning( pop ) //AMD Port
+	#pragma warning( pop )            //AMD Port
 #endif
 
 //=====================================================================
 
-#endif                   // __CSHADER_H__
+#endif  // __CSHADER_H__

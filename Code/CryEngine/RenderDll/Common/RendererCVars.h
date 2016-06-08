@@ -127,7 +127,6 @@ public:
 	static int   CV_r_shadersdurango;
 #endif
 	//  static int CV_r_envcmwrite;
-	static int CV_r_shaderspreactivate;
 	static int CV_r_shadersremotecompiler;
 	static int CV_r_shadersasynccompiling;
 	static int CV_r_shadersasyncactivation;
@@ -186,17 +185,12 @@ public:
 	static int CV_r_NoDraw;
 	static int CV_r_UpdateInstances;
 
-	// compute skinning related cvars
-	DeclareConstIntCVar(r_ComputeSkinning, 1);
-	DeclareConstIntCVar(r_ComputeSkinningMorphs, 1);
-	DeclareConstIntCVar(r_ComputeSkinningTangents, 1);
-	DeclareConstIntCVar(r_ComputeSkinningDebugDraw, 0);
-
 	//declare in release mode constant cvars
 	DeclareStaticConstIntCVar(CV_r_stats, 0);
 	DeclareStaticConstIntCVar(CV_r_statsMinDrawcalls, 0);
 	DeclareStaticConstIntCVar(CV_r_profiler, 0);
 	static float CV_r_profilerTargetFPS;
+	DeclareStaticConstIntCVar(CV_r_LightPropagationVolumes, 1);
 	DeclareStaticConstIntCVar(CV_r_ShadowPoolMaxFrames, 30);
 	DeclareStaticConstIntCVar(CV_r_log, 0);
 	DeclareStaticConstIntCVar(CV_r_logTexStreaming, 0);
